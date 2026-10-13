@@ -106,7 +106,7 @@ class Resonestor {
     burst_lp_.Init();
     rand_lp_.Init();
     rand_hp_.Init();
-    rand_hp_.set_f<FREQUENCY_FAST>(1.0f / R::kRate);
+    rand_hp_.template set_f<FREQUENCY_FAST>(1.0f / R::kRate);
     for (int v=0; v<2; v++)
       for (int p=0; p<4; p++) {
         lp_[p][v].Init();
@@ -168,10 +168,10 @@ class Resonestor {
     /* set LP/BP filters frequencies and feedback */
     for (int p=0; p<4; p++) {
       float freq = 1.0f / comb_period_[p][voice_];
-      bp_[p][voice_].set_f_q<FREQUENCY_FAST>(freq, narrow_[voice_]);
+      bp_[p][voice_].template set_f_q<FREQUENCY_FAST>(freq, narrow_[voice_]);
       float lp_freq = (2.0f * freq + 1.0f) * damp_[voice_];
       CONSTRAIN(lp_freq, 0.0f, 1.0f);
-      lp_[p][voice_].set_f_q<FREQUENCY_FAST>(R::Freq(lp_freq), 0.4f);
+      lp_[p][voice_].template set_f_q<FREQUENCY_FAST>(R::Freq(lp_freq), 0.4f);
       comb_feedback_[p][voice_] = powf(feedback_[voice_], comb_period_[p][voice_] / R::kRate);
     }
 
@@ -185,7 +185,7 @@ class Resonestor {
         spread_delay_[i] = Random::GetFloat() * (bd0.length - 1);
     }
 
-    rand_lp_.set_f_q<FREQUENCY_FAST>(R::Freq(distortion_[voice_] * 0.4f), 1.0f);
+    rand_lp_.template set_f_q<FREQUENCY_FAST>(R::Freq(distortion_[voice_] * 0.4f), 1.0f);
 
     while (size--) {
       engine_.Start(&c);
@@ -204,7 +204,7 @@ class Resonestor {
       c.Write(bc, 1.0f);
       float burst;
       c.Write(burst);
-      c.Load(burst_lp_.Process<FILTER_MODE_LOW_PASS>(burst));
+      c.Load(burst_lp_.template Process<FILTER_MODE_LOW_PASS>(burst));
       c.Write(burst);
 
       c.Load(burst);
@@ -220,8 +220,8 @@ class Resonestor {
       amplitude *= 0.3f;
       amplitude *= amplitude;
       random *= amplitude;
-      random = rand_lp_.Process<FILTER_MODE_LOW_PASS>(random);
-      random = rand_hp_.Process<FILTER_MODE_HIGH_PASS>(random);
+      random = rand_lp_.template Process<FILTER_MODE_LOW_PASS>(random);
+      random = rand_hp_.template Process<FILTER_MODE_HIGH_PASS>(random);
 
 #define COMB(pre, part, voice, vol)                                     \
       {                                                                 \
@@ -235,8 +235,8 @@ class Resonestor {
                              comb_feedback_[part][voice] * 0.3f);       \
         float acc;                                                      \
         c.Write(acc);                                                   \
-        acc = lp_[part][voice].Process<FILTER_MODE_LOW_PASS>(acc);      \
-        acc = bp_[part][voice].Process<FILTER_MODE_BAND_PASS_NORMALIZED>(acc); \
+        acc = lp_[part][voice].template Process<FILTER_MODE_LOW_PASS>(acc);      \
+        acc = bp_[part][voice].template Process<FILTER_MODE_BAND_PASS_NORMALIZED>(acc); \
         c.Load(acc);                                                    \
         c.Hp(hp_[part][voice], 10.0f / R::kRate);                       \
         c.Write(acc, 0.5f);                                             \
@@ -322,7 +322,7 @@ class Resonestor {
   }
 
   void set_burst_damp(float burst_damp) {
-    burst_lp_.set_f_q<FREQUENCY_FAST>(R::Freq(burst_damp * burst_damp * 0.5f), 0.8f);
+    burst_lp_.template set_f_q<FREQUENCY_FAST>(R::Freq(burst_damp * burst_damp * 0.5f), 0.8f);
   }
 
   void set_burst_comb(float burst_comb) {
