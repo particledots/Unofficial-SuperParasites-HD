@@ -9,6 +9,9 @@ on:
 jobs:
   build-macos:
     runs-on: macos-14     # Apple silicon runner
+    defaults:
+      run:
+        shell: bash .github/wrap.sh {0}   # same as plain bash, plus a readable error annotation when a step fails
     steps:
       - uses: actions/checkout@v4
 
