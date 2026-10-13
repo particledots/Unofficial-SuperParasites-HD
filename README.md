@@ -85,7 +85,10 @@ Download `SuperParasites-HD-macOS` from the latest passing run in the Actions ta
     whose own spread is about 2 - 4 %);
   * spectrum with white noise in, all eight modes, hi-fi and low-fi: each octave band 100 Hz - 12.8 kHz agrees in shape within 3 dB (6 dB in the top octave, see item 1
     above); total level within 2 dB.
-* The plug-in sources compile with JUCE 8.0.6 in CI (the GitHub run for this commit; see the Actions tab for the current state).
+* *GitHub Actions on macOS (run 38476158548, commit `69a40f7`, passed):* the universal arm64 + x86_64 AU and VST3 build, the ad-hoc signing and packaging, `engine_test` at
+  both engine rates, `rate_compare_test`, and the bit-for-bit comparison of the 32 kHz output with Extended built with the macOS compiler. (I can only see that the steps
+  exited successfully, not their log: the log host is not reachable from where I work.) The first run failed because AppleClang wants the `template` keyword in
+  `resonestor.h`; fixed.
 
 **Not verified**
 * Loading in Logic on the M4 Mac mini or the Intel Mac; whether the Engine Rate switch behaves in a host (it rebuilds the processor on the audio thread, like Buffer Length).
