@@ -14,6 +14,28 @@ Not a Mutable Instruments product, and not made or endorsed by any of the module
 **I have not listened to it, and nothing here claims the 48 kHz engine sounds the same as, or better than, the 32 kHz one.** The tests below measure times,
 pitches, decay times and spectra. Whether the difference is audible, and which you prefer, is for you to say.
 
+## Output Level (version 0.2.0)
+**What was wrong.** Loading any plug-in of this family made the sound quieter than before it was loaded. With Dry/Wet at 0 (nothing but the input) I measured the output at
+**-9.04 dB** relative to the input in the six modes that have a dry path (Granular, Pitch shifter / time stretch, Looping delay, Spectral madness, Oliverb, Spectral clouds), at every
+host rate tested (44.1, 48, 96 kHz), both engine rates and all four qualities. The cause is in the firmware code, not the wrapper: its dry/wet crossfade table starts at 0.707 (-3 dB) and its
+output conversion halves the signal (x 0.5, -6 dB) before the 16-bit output. The module's analogue output stage presumably makes that up; a plug-in has none.
+
+**The fix.** A new **OUTPUT LEVEL** knob (parameter `output_level`, -24 to +24 dB, default **+9.03 dB** = 20 x log10 (2 x sqrt 2)) sits after the engine, followed by a **soft limiter**.
+With the default, a fully dry signal comes out at the level it went in. The limiter passes everything below -0.9 dBFS unchanged and bends louder peaks towards 0 dBFS, which they
+never exceed; it is an instant curve (no delay, no look-ahead), a safety net against clipping rather than a mastering limiter. The gain glides (about 10 ms) so moving or automating the knob does not click.
+The engine and firmware code are untouched, so the 32 kHz setting still equals Extended bit for bit (the workflow checks that). The stage lives in `src/OutputStage.h` and is called from `processBlock`.
+
+**What it does not do.**
+* **Beat repeat and Resonestor have no dry path in the firmware**, so "fully dry equals the input" does not apply to them. Beat repeat forces its blend to wet and the input always goes through
+  the slice player (the firmware applies a 1.2 x, +1.6 dB, gain to it that the other modes' dry signal does not get); Resonestor's Dry/Wet knob is a distortion amount. Measured at the default Output Level, input -18 dBFS:
+  Beat repeat **+1.57 dB** (16-bit), Resonestor **-1.61 dB** (16-bit); in the low-fi qualities Beat repeat is -0.2 dB (stereo 8-bit) and Resonestor -2.6 dB. I left those as they are: whether they should be
+  trimmed to match is your call.
+* **Beat repeat in Mono 8-bit (low-fi) gives no output at all** in this test (-330 dB, at every Dry/Wet setting). It is in the firmware code path and was there before this change; I have not looked into it.
+* Loud dry signals are bent slightly by the firmware's own soft limit, before this stage: Looping delay, dry, input -6 dBFS: -0.06 dB; -1.9 dBFS: -0.16 dB; -0.4 dBFS: -0.22 dB.
+* The firmware's output is 16-bit and is 9 dB lower than the input before this gain is applied, so the gain also raises the firmware's own 16-bit rounding noise by 9 dB (it does not add any). I have not measured or listened for it in quiet passages.
+* **Presets and projects saved before 0.2.0 have no Output Level**, so they load at the +9.03 dB default and come out about 9 dB louder than they did. That is the fix, but if you
+  had turned the channel up to compensate, turn it back down.
+
 ## How the two settings relate
 
 | | 32 kHz (original) | 48 kHz (HD) |
@@ -64,6 +86,22 @@ Download `SuperParasites-HD-macOS` from the latest passing run in the Actions ta
 (universal arm64 + x86_64, macOS 11 or later). Controls are the same as in the other plug-ins, plus the Engine Rate menu next to Buffer Length.
 
 ## Verified and not verified
+
+**Output Level (version 0.2.0) - measured and tested here (Linux, g++, October 2026), not listened to**
+* `tests/level_test.cpp`: 10,573 checks, 0 failed. Fully dry (Dry/Wet = 0) at the default Output Level, engine + stage output equals the input level within 0.1 dB in each of the six dry-path modes, at 44.1 / 48 / 96 kHz
+  host, every engine rate and quality the plug-in has, input -18 dBFS (and -6 dBFS at 48 kHz); worst deviation 0.064 dB. The limiter: identity up to its threshold, odd-symmetric, monotonic, slope 1 at the threshold,
+  never above 1.0 for any input including infinity, NaN becomes 0. The gain is exact to 0.001 dB at -24, -6, 0, +9.03 and +12 dB; a step from +9.03 to -24 dB glides with no jump. No clipping: with a 0.95-amplitude input, all modes
+  and qualities, Dry/Wet 0 / 0.5 / 1, Output Level at the default and at +24 dB, no sample exceeds 1.0; without the limiter the engine's wet peaks at the default gain would reach about 2.3 x full scale.
+* `tests/proc_level_test.cpp`: 24 checks, 0 failed, on the real plug-in processor class (the same `PluginProcessor.cpp` as the AU / VST3, compiled against JUCE 8.0.6, run headless): the parameter exists and its default shows as "+9.03 dB";
+  the six dry-path modes come out within 0.013 dB of the input at the defaults; setting Output Level to -24 / -9.03 / 0 / +6 dB moves the output by exactly that much (within 0.02 dB); loud input at +24 dB in every mode stays at or below 1.0;
+  a preset saved without an Output Level loads at +9.03 dB (and keeps its other settings), also into an instance whose knob had been turned to 0 dB.
+* **Mutation checks (the tests fail when the level is broken).** `tests/mutation_check.sh` breaks `OutputStage.h` in four ways (gain removed, default 8.0 dB instead of 9.03, wrong dB-to-gain factor, limiter removed) and the level test failed for every one
+  (17, 13, 19 and 4,035 failed checks), while passing on the unbroken code. `tests/wiring_mutation_check.sh` breaks `processBlock` in three ways (stage not called, level parameter not read, parameter default 0 dB) and the whole-plug-in test failed each
+  time (9, 9 and 8 failed checks); the source is restored afterwards. Both are workflow steps.
+* The existing suites still pass with the new CMake targets (`engine_test`, `rate_compare_test`); the engine and firmware code are not touched, so the bit-for-bit check against Extended in the workflow is unaffected.
+* The editor source (the fifth knob in the second row) compiles against JUCE 8.0.6 with the rest of the plug-in. **How it looks is not checked: I have not seen the editor.**
+* **Not verified:** how it sounds; that the level you read on Logic's meters / faders now matches; the 16-bit noise floor at +9 dB in quiet passages; the knob row in Logic; behaviour when automated; any
+  match with the real module's output level; Beat repeat and Resonestor levels against a real module.
 
 **Verified here (Linux, g++, October 2026)**
 * *32 kHz setting equals Extended.* `tests/bit_exact_dump.cpp` hashes the output of every mode x quality (4) x Buffer Length (1 s, 4 s), 64 combinations, 6 s each,
